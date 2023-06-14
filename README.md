@@ -34,7 +34,7 @@ User=
 Type=simple
 Restart=always
 WorkingDirectory=/home/Documents/Netcore-to-Raisers-Edge-Sync
-ExecStart=/home/.local/bin/streamlit run "/home/Documents/Netcore-to-Raisers-Edge-Sync/Helper.py"
+ExecStart=/home/.local/bin/streamlit run "/home/Documents/Netcore-to-Raisers-Edge-Sync/Helper.py" --server.baseUrlPath /netcore
 
 [Install]
 WantedBy=multi-user.target
