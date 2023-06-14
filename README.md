@@ -1,4 +1,4 @@
-# Netcore-to-Raisers-Edge-Sync
+# Netcore to Raisers Edge Sync
 
 ## Pre-requisites
 - A Linux (Ubuntu) machine
