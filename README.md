@@ -54,7 +54,7 @@ server {
     server_name 10.199.4.149;
     client_max_body_size 200M;
 
-    location /data1 {
+    location /netcore {
         proxy_pass http://127.0.0.1:8502/netcore;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
