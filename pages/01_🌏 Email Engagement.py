@@ -19,7 +19,7 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 st.title('Netcore Engagement Recorder')
 
 # Load the Parquet file into a Pandas dataframe
-# @st.cache_data() # Reset cache every 1 Hour
+@st.cache_data()
 def get_templates():
     templates = pd.read_csv('Templates/Netcore Email Stats.csv')
     return templates
