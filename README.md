@@ -4,7 +4,7 @@
 - A Linux (Ubuntu) machine
 - Install below packages
 ```bash
-sudo apt install pyton3-pip
+sudo apt install python3-pip
 sudo apt install nginx
 ```
 - Install below Python packages:
