@@ -19,12 +19,10 @@ from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 from dotenv import load_dotenv
 
-
 def set_current_directory():
     logging.info('Setting current directory')
 
     os.chdir(os.getcwd())
-
 
 def start_logging():
     global process_name
@@ -38,10 +36,8 @@ def start_logging():
     # Printing the output to file for debugging
     logging.info('Starting the Script')
 
-
 def stop_logging():
     logging.info('Stopping the Script')
-
 
 def housekeeping():
     logging.info('Doing Housekeeping')
@@ -56,7 +52,6 @@ def housekeeping():
             os.remove(each_file)
         except:
             pass
-
 
 def set_api_request_strategy():
     logging.info('Setting API Request strategy')
@@ -78,7 +73,6 @@ def set_api_request_strategy():
     http.mount('https://', adapter)
     http.mount('http://', adapter)
 
-
 def get_env_variables():
     logging.info('Setting Environment variables')
 
@@ -94,7 +88,6 @@ def get_env_variables():
     SMTP_URL = os.getenv('SMTP_URL')
     SMTP_PORT = os.getenv('SMTP_PORT')
     SEND_TO = os.getenv('SEND_TO')
-
 
 def send_error_emails(subject):
     logging.info('Sending email for an error')
@@ -192,7 +185,6 @@ def send_error_emails(subject):
         imap.append('Sent', '\\Seen', imaplib.Time2Internaldate(time.time()), emailcontent.encode('utf8'))
         imap.logout()
 
-
 def attach_file_to_email(message, filename):
     # Open the attachment file for reading in binary mode, and make it a MIMEApplication class
     with open(filename, "rb") as f:
@@ -207,9 +199,7 @@ def attach_file_to_email(message, filename):
     # Attach the file to the message
     message.attach(file_attachment)
 
-
 def retrieve_token():
-    global access_token
 
     logging.info('Retrieve token for API connections')
 
@@ -217,6 +207,7 @@ def retrieve_token():
         data = json.load(access_token_output)
         access_token = data['access_token']
 
+    return access_token
 
 def pagination_api_request(url, params):
     # Pagination request to retreive list
@@ -240,7 +231,6 @@ def pagination_api_request(url, params):
 
             else:
                 break
-
 
 def load_from_json_to_parquet():
     logging.info('Loading from JSON to Parquet file')
@@ -282,11 +272,10 @@ def get_request_re(url, params):
     headers = {
         # Request headers
         'Bb-Api-Subscription-Key': RE_API_KEY,
-        'Authorization': 'Bearer ' + access_token,
+        'Authorization': 'Bearer ' + retrieve_token(),
     }
 
     re_api_response = http.get(url, params=params, headers=headers).json()
-
 
 try:
 
@@ -305,9 +294,6 @@ try:
     # Set API Request strategy
     set_api_request_strategy()
 
-    # Retrieve access_token from file
-    retrieve_token()
-
     # Get List of Alums with Email
     url = 'https://api.sky.blackbaud.com/constituent/v1/emailaddresses?limit=5000'
     params = {}
@@ -325,7 +311,7 @@ except Exception as Argument:
 finally:
 
     # Housekeeping
-    # housekeeping()
+    housekeeping()
 
     # Stop Logging
     stop_logging()
