@@ -1,34 +1,26 @@
 import requests
 import os
 import json
-import glob
 import smtplib
 import ssl
-import re
 import imaplib
 import datetime
 import logging
-import time
-import random
-import string
 import pandas as pd
-import numpy as np
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from jinja2 import Environment
 from datetime import datetime
+from datetime import time
 from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 from dotenv import load_dotenv
-from datetime import date
-from datetime import timedelta
-
 
 def set_current_directory():
+    logging.info('Setting current directory')
     os.chdir(os.getcwd())
-
 
 def start_logging():
     global process_name
@@ -42,33 +34,13 @@ def start_logging():
     # Printing the output to file for debugging
     logging.info('Starting the Script')
 
-
 def stop_logging():
     logging.info('Stopping the Script')
-
-
-def housekeeping():
-    logging.info('Doing Housekeeping')
-
-    # Housekeeping
-    multiple_files = glob.glob('*_RE_*.json')
-
-    # Iterate over the list of filepaths & remove each file.
-    logging.info('Removing old JSON files')
-    for each_file in multiple_files:
-        try:
-            os.remove(each_file)
-        except:
-            pass
-
 
 def set_api_request_strategy():
     logging.info('Setting API Request strategy')
 
     global http
-
-    # API Request strategy
-    logging.info('Setting API Request Strategy')
 
     retry_strategy = Retry(
         total=3,
@@ -82,11 +54,10 @@ def set_api_request_strategy():
     http.mount('https://', adapter)
     http.mount('http://', adapter)
 
-
 def get_env_variables():
     logging.info('Setting Environment variables')
 
-    global RE_API_KEY, MAIL_USERN, MAIL_PASSWORD, IMAP_URL, IMAP_PORT, SMTP_URL, SMTP_PORT, SEND_TO, FORM_URL
+    global RE_API_KEY, MAIL_USERN, MAIL_PASSWORD, IMAP_URL, IMAP_PORT, SMTP_URL, SMTP_PORT, SEND_TO
 
     load_dotenv()
 
@@ -98,8 +69,6 @@ def get_env_variables():
     SMTP_URL = os.getenv('SMTP_URL')
     SMTP_PORT = os.getenv('SMTP_PORT')
     SEND_TO = os.getenv('SEND_TO')
-    FORM_URL = os.getenv('FORM_URL')
-
 
 def send_error_emails(subject):
     logging.info('Sending email for an error')
@@ -197,10 +166,7 @@ def send_error_emails(subject):
         imap.append('Sent', '\\Seen', imaplib.Time2Internaldate(time.time()), emailcontent.encode('utf8'))
         imap.logout()
 
-
 def attach_file_to_email(message, filename):
-    logging.info('Attach file to email')
-
     # Open the attachment file for reading in binary mode, and make it a MIMEApplication class
     with open(filename, "rb") as f:
         file_attachment = MIMEApplication(f.read())
@@ -208,15 +174,13 @@ def attach_file_to_email(message, filename):
     # Add header/name to the attachments
     file_attachment.add_header(
         "Content-Disposition",
-        f"attachment; filename= {filename.replace('Logs', '')}",
+        f"attachment; filename= {filename}",
     )
 
     # Attach the file to the message
     message.attach(file_attachment)
 
-
 def retrieve_token():
-    global access_token
 
     logging.info('Retrieve token for API connections')
 
@@ -224,198 +188,200 @@ def retrieve_token():
         data = json.load(access_token_output)
         access_token = data['access_token']
 
+    return access_token
 
-def load_data(file):
-    logging.info('Loading data to Pandas Dataframe')
+def get_request_re(url, params):
+    logging.info('Running GET Request from RE function')
 
-    # Get extension
-    ext = os.path.splitext(file)[1].lower()
+    # Request Headers for Blackbaud API request
+    headers = {
+        # Request headers
+        'Bb-Api-Subscription-Key': RE_API_KEY,
+        'Authorization': 'Bearer ' + retrieve_token(),
+    }
 
-    # Excel
-    if ext == '.xlsx' or ext == '.xls':
+    logging.info(params)
 
-        # Load file to DataFrame
-        data = pd.read_excel(f'Databases/{file}')
+    re_api_response = http.get(url, params=params, headers=headers).json()
 
-    # CSV
-    elif ext == '.csv':
+    return re_api_response
 
-        # Load file to DataFrame
-        data = pd.read_csv(f'Databases/{file}')
+def post_request_re(url, params):
+    logging.info('Running POST Request to RE function')
 
-    # Parquet
-    else:
-        # Load file to DataFrame
-        data = pd.read_parquet(f'Databases/{file}')
+    # Request headers
+    headers = {
+        'Bb-Api-Subscription-Key': RE_API_KEY,
+        'Authorization': 'Bearer ' + retrieve_token(),
+        'Content-Type': 'application/json',
+    }
 
-    return data
+    logging.info(params)
 
+    re_api_response = http.post(url, params=params, headers=headers, json=params).json()
+
+    return re_api_response
+
+def patch_request_re(url, params):
+    logging.info('Running PATCH Request to RE function')
+
+    # Request headers
+    headers = {
+        'Bb-Api-Subscription-Key': RE_API_KEY,
+        'Authorization': 'Bearer ' + retrieve_token(),
+        'Content-Type': 'application/json'
+    }
+
+    logging.info(params)
+
+    re_api_response = http.patch(url, headers=headers, data=json.dumps(params))
+
+    return re_api_response
+
+def load_data(source):
+    df = pd.read_parquet(source)
+    return df
+
+def get_hard_bounces():
+    df = netcore[netcore['Bounce Type'] == 'Hard Bounce'][['EMAIL (Primary Key)']].drop_duplicates().reset_index(drop=True)
+    return df
 
 def find_remaining_data(all_df, partial_df):
     logging.info('Identifying missing data between two Panda Dataframes')
 
     # Concatenate dataframes A and B vertically and drop duplicates
-    remaining_data = pd.concat([all_df, partial_df]).drop_duplicates(keep=False)
-
-    return remaining_data
-
-
-def check_errors(re_api_response):
-    logging.info('Checking for exceptions')
-
-    error_keywords = ['error', 'failed', 'invalid', 'unauthorized', 'bad request', 'forbidden', 'not found']
-
-    for keyword in error_keywords:
-        if keyword in str(re_api_response).lower():
-            raise Exception(f'API returned an error: {re_api_response}')
-
-
-def get_request_re(url, params):
-    logging.info('Running GET Request from RE function')
-
-    global re_api_response
-
-    # Retrieve access_token from file
-    retrieve_token()
-
-    # Request headers
-    headers = {
-        'Bb-Api-Subscription-Key': RE_API_KEY,
-        'Authorization': 'Bearer ' + access_token,
-    }
-
-    re_api_response = http.get(url, params=params, headers=headers).json()
-
-    logging.info(re_api_response)
-
-    check_errors(re_api_response)
-
-def post_request_re(url, params):
-    logging.info('Running POST Request to RE function')
-
-    global re_api_response
-
-    # Retrieve access_token from file
-    retrieve_token()
-
-    # Request headers
-    headers = {
-        'Bb-Api-Subscription-Key': RE_API_KEY,
-        'Authorization': 'Bearer ' + access_token,
-        'Content-Type': 'application/json',
-    }
-
-    re_api_response = http.post(url, params=params, headers=headers, json=params).json()
-
-    logging.info(re_api_response)
-
-    check_errors(re_api_response)
-
-def patch_request_re(url, params):
-    logging.info('Running PATCH Request to RE function')
-
-    global re_api_response
-
-    # Retrieve access_token from file
-    retrieve_token()
-
-    # Request headers
-    headers = {
-        'Bb-Api-Subscription-Key': RE_API_KEY,
-        'Authorization': 'Bearer ' + access_token,
-        'Content-Type': 'application/json'
-    }
-
-    re_api_response = http.patch(url, headers=headers, data=json.dumps(params))
-
-    logging.info(re_api_response)
-
-    check_errors(re_api_response)
-
-def del_blank_values_in_json(d):
-    """
-    Delete keys with the value ``None`` in a dictionary, recursively.
-
-    This alters the input so you may wish to ``copy`` the dict first.
-    """
-    # For Python 3, write `list(d.items())`; `d.items()` won’t work
-    # For Python 2, write `d.items()`; `d.iteritems()` won’t work
-    for key, value in list(d.items()):
-        if value == "" or value == {} or value == [] or value == [""]:
-            del d[key]
-        elif isinstance(value, dict):
-            del_blank_values_in_json(value)
-    return d
-
-
-def api_to_df(response):
-    logging.info('Loading API response to a DataFrame')
-
-    # Load from JSON to pandas
-    try:
-        api_response = pd.json_normalize(response['value'])
-    except:
-        try:
-            api_response = pd.json_normalize(response)
-        except:
-            api_response = pd.json_normalize(response, 'value')
-
-    # Load to a dataframe
-    df = pd.DataFrame(data=api_response)
+    df = pd.concat([all_df, partial_df]).drop_duplicates(keep=False)
 
     return df
 
+def identify_hard_bounces():
 
-def add_tags(source, tag, update, constituent_id):
-    logging.info('Adding Tags to constituent record')
+    # Load Records already uploaded in RE
+    if os.path.exists('Databases/Hard Bounces.parquet'):
+        hard_bounces_uploaded = pd.read_parquet('Databases/Hard Bounces.parquet')
+        df = find_remaining_data(hard_bounces, hard_bounces_uploaded).copy()
+    else:
+        df = hard_bounces.copy()
 
-    params = {
-        'category': tag,
-        'comment': update,
-        'parent_id': constituent_id,
-        'value': source,
-        'date': datetime.now().replace(microsecond=0).isoformat()
-    }
+    return df
 
-    url = 'https://api.sky.blackbaud.com/constituent/v1/constituents/customfields'
+def get_unsubscribes():
+    df = netcore[~netcore['Unsub reason'].isnull()][['EMAIL (Primary Key)', 'Subject', 'Sent Date', 'Open time', 'Unsub reason']].drop_duplicates().reset_index(drop=True)
+    return df
 
-    post_request_re(url, params)
+def identify_unsubscribes():
 
-def hard_bounces():
+    # Load Records already uploaded in RE
+    if os.path.exists('Databases/Unsubscribes.parquet'):
+        unsubscribes_uploaded = pd.read_parquet('Databases/Unsubscribes.parquet')
+        df = find_remaining_data(unsubscribes, unsubscribes_uploaded).copy()
+    else:
+        df = unsubscribes.copy()
 
-    ## Load Hard Bounces
-    hard_bounces = load_data('Databases/Hard Bounces/Complete.parquet').copy()
+    return df
 
+def post_unsubscribes_to_re():
+
+    # Check if there's anything to upload
+    if unsubscribes_new.shape[0] != 0:
+
+        # Load Records already uploaded in RE
+        if os.path.exists('Databases/Unsubscribes.parquet'):
+            unsubscribes_uploaded = pd.DataFrame('Databases/Unsubscribes.parquet')
+        else:
+            unsubscribes_uploaded = pd.DataFrame()
+
+        # Iterate over rows
+        for index, row in unsubscribes_new.iterrows():
+
+            # Load Object to Dataframe
+            row = pd.DataFrame(row)
+            row = row.T.reset_index(drop=True).copy()
+
+            # Get Email Address
+            email = row['EMAIL (Primary Key)'].tolist()[0]
+
+            # Get date
+            date = row['Open time'].tolist()[0]
+
+            if pd.isnull(date):
+                date = row['Sent Date'].tolist()[0]
+
+            date = pd.to_datetime(date, format='%Y-%m-%d %H:%M:%S')
+            date = date.isoformat()
+
+            # Get RE IDs associated with that email
+            re_ids = re_email_list[re_email_list['address'] == email]['constituent_id'].drop_duplicates().tolist()
+
+            # Loop over each unique RE ID
+            for re_id in re_ids:
+
+                # Opt-out
+                params = {
+                    'constituent_id': re_id,
+                    'channel': 'Email',
+                    'category': 'Netcore Email Marketing',
+                    'source': 'Netcore',
+                    'consent_date': date,
+                    'constituent_consent_response': 'OptOut',
+                    'consent_statement': email + ': ' + row['Subject'].tolist()[0] + ' | ' + row['Unsub reason'].tolist()[0]
+                }
+
+                url = 'https://api.sky.blackbaud.com/commpref/v1/consent/consents'
+
+                # Post Data to RE
+                post_request_re(url, params)
+
+                # Update the Dataframe
+                unsubscribes_uploaded = pd.concat([unsubscribes_uploaded, row], ignore_index=True)
+
+        # Update Database of one marked as unsubscribed in RE
+        unsubscribes_uploaded.to_parquet('Databases/Unsubscribes.parquet')
 
 try:
-    # Set current directory
-    set_current_directory()
 
     # Start Logging for Debugging
     start_logging()
 
+    # Set current directory
+    set_current_directory()
+
     # Retrieve contents from .env file
     get_env_variables()
-
-    # Housekeeping
-    housekeeping()
 
     # Set API Request strategy
     set_api_request_strategy()
 
-    # Work on Hard Bounces
+    # Get RE Email List
+    re_email_list = load_data('Databases/Email List.parquet').copy()
+
+    # Load Netcore's Data
+    netcore = load_data('Databases/Netcore Data.parquet').copy()
+
+    # Get Unsubscribes
+    unsubscribes = get_unsubscribes().copy()
+
+    # Identify Unsubscribes yet to upload in RE
+    unsubscribes_new = identify_unsubscribes().copy()
+
+    # Upload Unsubscribes data to RE
+    post_unsubscribes_to_re()
+
+    # Get Hard Bounces
+    hard_bounces = get_hard_bounces().copy()
+
+    # Identify Bounces yet to upload in RE
+    hard_bounces_new = identify_hard_bounces().copy()
+
+    # Upload Hard Bounces data to RE
 
 
 except Exception as Argument:
 
     logging.error(Argument)
-
-    send_error_emails('Error while uploading data to RE | Netcore Sync')
+    send_error_emails('Error while uploading unsubscribes and bounces | Netcore Sync')
 
 finally:
-
-    # Housekeeping
-    housekeeping()
 
     # Stop Logging
     stop_logging()
