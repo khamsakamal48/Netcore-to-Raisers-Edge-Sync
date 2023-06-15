@@ -1,6 +1,7 @@
 [server]
 headless = true
 port = 8502
+baseUrlPath = 'netcore'
 
 [browser]
 gatherUsageStats = false
