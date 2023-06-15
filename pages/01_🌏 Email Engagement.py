@@ -46,11 +46,13 @@ if uploaded_files:
     existing_df = pd.concat([existing_df, df])
     existing_df = existing_df.drop_duplicates().copy()
 
+    # Set Datetime format
+    existing_df['Sent Date'] = pd.to_datetime(existing_df['Sent Date'], format='%d-%m-%Y %H:%M')
+    existing_df['Open time'] = pd.to_datetime(existing_df['Open time'], format='%d-%m-%Y %H:%M')
+
     existing_df.to_parquet('Databases/Netcore Data.parquet', index=False)
 
     st.markdown('##')
-
-
 
     with st.empty():
 
