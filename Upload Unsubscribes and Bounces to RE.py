@@ -239,10 +239,14 @@ def patch_request_re(url, params):
     return re_api_response
 
 def load_data(source):
+    logging.info(f'Load Data from {source}')
+
     df = pd.read_parquet(source)
     return df
 
 def get_hard_bounces():
+    logging.info('Getting the list of Hard Bounces')
+
     df = netcore[netcore['Bounce Type'] == 'Hard Bounce'][['EMAIL (Primary Key)']].drop_duplicates().reset_index(drop=True)
     return df
 
@@ -255,6 +259,7 @@ def find_remaining_data(all_df, partial_df):
     return df
 
 def identify_hard_bounces():
+    logging.info('Identifying New Hard Bounces')
 
     # Load Records already uploaded in RE
     if os.path.exists('Databases/Hard Bounces.parquet'):
@@ -266,10 +271,13 @@ def identify_hard_bounces():
     return df
 
 def get_unsubscribes():
+    logging.info('Getting the list of Unsubscribes')
+
     df = netcore[~netcore['Unsub reason'].isnull()][['EMAIL (Primary Key)', 'Subject', 'Sent Date', 'Open time', 'Unsub reason']].drop_duplicates().reset_index(drop=True)
     return df
 
 def identify_unsubscribes():
+    logging.info('Identifying new Unsubscribes')
 
     # Load Records already uploaded in RE
     if os.path.exists('Databases/Unsubscribes.parquet'):
@@ -281,13 +289,14 @@ def identify_unsubscribes():
     return df
 
 def post_unsubscribes_to_re():
+    logging.info('Posting Unsubscribers to RE')
 
     # Check if there's anything to upload
     if unsubscribes_new.shape[0] != 0:
 
         # Load Records already uploaded in RE
         if os.path.exists('Databases/Unsubscribes.parquet'):
-            unsubscribes_uploaded = pd.DataFrame('Databases/Unsubscribes.parquet')
+            unsubscribes_uploaded = pd.read_parquet('Databases/Unsubscribes.parquet')
         else:
             unsubscribes_uploaded = pd.DataFrame()
 
@@ -338,6 +347,51 @@ def post_unsubscribes_to_re():
         # Update Database of one marked as unsubscribed in RE
         unsubscribes_uploaded.to_parquet('Databases/Unsubscribes.parquet')
 
+def post_bounces_to_re():
+    logging.info('Marking Inactive Emails in RE')
+
+    # Check if there's anything to upload
+    if hard_bounces_new.shape[0] != 0:
+
+        # Load Records already uploaded in RE
+        if os.path.exists('Databases/Hard Bounces.parquet'):
+            hard_bounces_uploaded = pd.read_parquet('Databases/Hard Bounces.parquet')
+        else:
+            hard_bounces_uploaded = pd.DataFrame()
+
+        # Iterate over rows
+        for index, row in hard_bounces_new.iterrows():
+
+            # Load Object to DataFrame
+            row = pd.DataFrame(row)
+            row = row.T.reset_index(drop=True).copy()
+
+            # Get Email Address
+            email = row['EMAIL (Primary Key)'].tolist()[0]
+
+            # Get RE IDs associated with that email
+            email_address_ids = re_email_list[re_email_list['address'] == email]['id'].drop_duplicates().tolist()
+
+            # Loop over each unique Email Address ID
+            for email_address_id in email_address_ids:
+
+                # Mark as Inactive
+                params = {
+                    'inactive': True,
+                    'primary': False
+                }
+
+                url = f'https://api.sky.blackbaud.com/constituent/v1/emailaddresses/{email_address_id}'
+
+                # Post Data to RE
+                patch_request_re(url, params)
+
+                # Update the Dataframe
+                hard_bounces_uploaded = pd.concat([hard_bounces_uploaded, row], ignore_index=True)
+
+        # Update Database of one marked as unsubscribed in RE
+        hard_bounces_uploaded.to_parquet('Databases/Hard Bounces.parquet')
+
 try:
 
     # Start Logging for Debugging
@@ -374,7 +428,7 @@ try:
     hard_bounces_new = identify_hard_bounces().copy()
 
     # Upload Hard Bounces data to RE
-
+    post_bounces_to_re()
 
 except Exception as Argument:
 
