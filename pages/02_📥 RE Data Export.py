@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import re
-import time
+import os
+import shutil
 
 st.set_page_config(
     page_title='Raisers Edge Data Sanitiser',
@@ -92,11 +93,48 @@ def do_cleanup(re_data):
 
     return re_data
 
+def remove_downloads():
+    shutil.rmtree('Download')
+    os.makedirs('Download')
+
+def compress_to_zip(folder):
+
+    # Set the directory
+    shutil.make_archive('Netcore_Data', 'zip', folder)
+
+def do_split(re_data, num_splits):
+    ### Remove Downloads
+    remove_downloads()
+
+    ### Sorting
+    re_data = re_data.sort_values(by=['CLASS_OF']).copy()
+
+    split_size = len(re_data) // num_splits
+
+    dfs = []
+    for i in range(num_splits):
+        start_index = i * split_size
+        end_index = (i + 1) * split_size
+        if i == num_splits - 1:
+            # Include remaining rows in the last split
+            end_index = len(re_data)
+        dfs.append(re_data[start_index:end_index])
+
+        # Access individual shuffled dataframes
+        for i, df_split in enumerate(dfs):
+            df_split.to_csv(f'Download/Data_{i + 1}.csv', index=False, lineterminator='\r\n', quoting=1)
+
+    # Compress to a single file
+    compress_to_zip('Download')
+
+    # Move File
+    shutil.move('Netcore_Data.zip', 'Download/Netcore_Data.zip')
+
 # Add file uploader for CSV file
 uploaded_file = st.file_uploader('Upload a CSV file', type='csv', label_visibility='collapsed')
 
 if uploaded_file:
-    re_data = pd.read_csv(uploaded_file, encoding='latin1')
+    re_data = pd.read_csv(uploaded_file, encoding='latin1', low_memory=False)
 
     re_data = do_cleanup(re_data).copy()
 
@@ -105,12 +143,38 @@ if uploaded_file:
     st.markdown('##')
 
     st.download_button(
-        label='Download Data for Netcore',
+        label='Download Data for Netcore (Complete)',
         data=re_data_csv,
         file_name='Data for Netcore - Complete.csv',
         mime='text/csv'
     )
 
+    # Code to split files
+    st.markdown('##')
+    st.markdown('##')
+    st.write('##### Do you want to split the data to multiple CSV files?')
     st.markdown('##')
 
+    num_splits = st.slider('###### No. of splits required:', 0, 50, 10)
+
+    if st.button('Split the Data'):
+        do_split(re_data, num_splits)
+
+        with open('Download/Netcore_Data.zip', 'rb') as f:
+            data = f.read()
+            st.download_button(
+                label="Download Data for Netcore (Split)",
+                data=data,
+                file_name="Data for Netcore - Split.zip",
+                mime="application/zip"
+            )
+
+        ### Remove Downloads
+        remove_downloads()
+
+        st.markdown("<style>div.row-widget.stButton > button:first-child {visibility: hidden;}</style>",
+                    unsafe_allow_html=True)
+
+    st.markdown('---')
+    st.markdown('##')
     st.dataframe(re_data, hide_index=True)
