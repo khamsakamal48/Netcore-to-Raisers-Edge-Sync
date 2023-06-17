@@ -98,6 +98,8 @@ uploaded_file = st.file_uploader('Upload a CSV file', type='csv', label_visibili
 if uploaded_file:
     re_data = pd.read_csv(uploaded_file, encoding='latin1')
 
+    re_data = do_cleanup(re_data).copy()
+
     re_data_csv = re_data.to_csv(index=False, lineterminator='\r\n', quoting=1)
 
     st.markdown('##')
