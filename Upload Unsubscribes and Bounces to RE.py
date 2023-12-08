@@ -219,6 +219,7 @@ def post_request_re(url, params):
     logging.info(params)
 
     re_api_response = http.post(url, params=params, headers=headers, json=params).json()
+    logging.info(re_api_response)
 
     return re_api_response
 
@@ -288,7 +289,8 @@ def identify_unsubscribes():
     # Load Records already uploaded in RE
     if os.path.exists('Databases/Unsubscribes.parquet'):
         unsubscribes_uploaded = pd.read_parquet('Databases/Unsubscribes.parquet')
-        df = find_remaining_data(unsubscribes, unsubscribes_uploaded).copy()
+        df = pd.concat([unsubscribes_uploaded[['EMAIL (Primary Key)', 'Subject']], unsubscribes[['EMAIL (Primary Key)', 'Subject']]]).drop_duplicates(keep=False)
+        df = pd.merge(left=df, right=unsubscribes, on=['EMAIL (Primary Key)', 'Subject'], how='left')
     else:
         df = unsubscribes.copy()
 
@@ -322,7 +324,11 @@ def post_unsubscribes_to_re():
             if pd.isnull(date):
                 date = row['Sent Date'].tolist()[0]
 
-            date = pd.to_datetime(date, format='%Y-%m-%d %H:%M:%S')
+            try:
+                date = pd.to_datetime(date, format='%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                date = pd.Timestamp(datetime.now())
+
             date = date.isoformat()
 
             # Get RE IDs associated with that email
@@ -347,11 +353,15 @@ def post_unsubscribes_to_re():
                 # Post Data to RE
                 post_request_re(url, params)
 
+                # Changing the sent date format
+                row['Sent Date'] = row['Sent Date'].astype(str)
+                row['Open time'] = row['Sent Date'].astype(str)
+
                 # Update the Dataframe
                 unsubscribes_uploaded = pd.concat([unsubscribes_uploaded, row], ignore_index=True)
 
-        # Update Database of one marked as unsubscribed in RE
-        unsubscribes_uploaded.to_parquet('Databases/Unsubscribes.parquet')
+                # Update Database of one marked as unsubscribed in RE
+                unsubscribes_uploaded.to_parquet('Databases/Unsubscribes.parquet')
 
 def post_bounces_to_re():
     logging.info('Marking Inactive Emails in RE')
