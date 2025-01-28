@@ -30,6 +30,20 @@ def is_valid_email(email: str) -> bool:
 
     if bool(re.match(email_regex, email)) == True: return email
     else: return np.NaN
+        
+
+def remove_non_ascii_chars(input_string):
+    """
+    Removes all non-ASCII characters from the given string.
+
+    Args:
+        input_string (str): The input string.
+
+    Returns:
+        str: The string with non-ASCII characters removed.
+    """
+    return ''.join(char for char in input_string if ord(char) < 128)
+    
 
 def do_cleanup(re_data):
 
@@ -79,6 +93,9 @@ def do_cleanup(re_data):
 
     ### Check for Duplicate emails
     re_data = re_data.drop_duplicates('EMAIL').copy()
+
+    ### Remove non-ASCII characters from email
+    re_data['EMAIL'] = re_data['EMAIL'].apply(remove_non_ascii_chars)
 
     ### Remove Invalid emails
     re_data['EMAIL'] = re_data['EMAIL'].str.strip()
