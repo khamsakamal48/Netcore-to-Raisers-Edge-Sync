@@ -81,6 +81,7 @@ def do_cleanup(re_data):
     re_data = re_data.drop_duplicates('EMAIL').copy()
 
     ### Remove Invalid emails
+    re_data['EMAIL'] = re_data['EMAIL'].str.strip()
     re_data['EMAIL'] = re_data['EMAIL'].apply(lambda x: is_valid_email(x))
     re_data = re_data.dropna(subset=['EMAIL']).copy()
 
